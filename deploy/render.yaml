@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: cynsta-spendguard
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: CAP_MODE
+        value: "sidecar"
+      - key: CAP_STORE
+        value: "sqlite"
+      - key: CAP_SQLITE_PATH
+        value: "/var/data/cynsta-spendguard.db"
+      - key: CAP_PRICING_SOURCE
+        value: "remote"
+      - key: CAP_PRICING_URL
+        value: "https://api.cynsta.com/v1/public/pricing"
+      - key: CAP_PRICING_VERIFY_SIGNATURE
+        value: "true"
+      - key: CAP_PRICING_SCHEMA_VERSION
+        value: "1"
+      - key: CAP_PRICING_SIGNING_KEY
+        sync: false
+      - key: CAP_PRICE_TABLE_REFRESH_SECONDS
+        value: "300"
+      - key: CAP_INGEST_URL
+        value: "https://<render-ingest-host>/v1/traces"
+      - key: CAP_INGEST_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
