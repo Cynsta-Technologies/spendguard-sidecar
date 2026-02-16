@@ -66,3 +66,7 @@ The sidecar expects this shape from cloud:
 - Provider endpoints under `/v1/agents/{agent_id}/runs/{run_id}/...`
 
 This wrapper intentionally does not enforce hosted API key auth.
+
+## License
+
+MIT. See `LICENSE`.
