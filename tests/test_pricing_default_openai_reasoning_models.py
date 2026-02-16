@@ -8,18 +8,18 @@ from app.pricing import RateCard, load_rates
 class TestPricingRemoteSourcePolicy(unittest.TestCase):
     def setUp(self):
         self._source = os.environ.get("CAP_PRICING_SOURCE")
-        self._sign = os.environ.get("CAP_PRICING_SIGNING_KEY")
-        os.environ["CAP_PRICING_SIGNING_KEY"] = "test-signing-key"
+        self._verify = os.environ.get("CAP_PRICING_VERIFY_SIGNATURE")
+        os.environ["CAP_PRICING_VERIFY_SIGNATURE"] = "false"
 
     def tearDown(self):
         if self._source is None:
             os.environ.pop("CAP_PRICING_SOURCE", None)
         else:
             os.environ["CAP_PRICING_SOURCE"] = self._source
-        if self._sign is None:
-            os.environ.pop("CAP_PRICING_SIGNING_KEY", None)
+        if self._verify is None:
+            os.environ.pop("CAP_PRICING_VERIFY_SIGNATURE", None)
         else:
-            os.environ["CAP_PRICING_SIGNING_KEY"] = self._sign
+            os.environ["CAP_PRICING_VERIFY_SIGNATURE"] = self._verify
 
     @patch("app.pricing.load_rates_from_remote")
     def test_sidecar_forces_remote_source(self, mock_remote):

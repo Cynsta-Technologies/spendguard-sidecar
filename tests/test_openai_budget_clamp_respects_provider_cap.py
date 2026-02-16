@@ -39,7 +39,7 @@ class TestOpenAIBudgetClampRespectsProviderCap(unittest.TestCase):
             os.environ["CAP_STORE"] = "sqlite"
             os.environ["CAP_SQLITE_PATH"] = db_path
             os.environ["CAP_PRICING_SOURCE"] = "remote"
-            os.environ["CAP_PRICING_SIGNING_KEY"] = "test-signing-key"
+            os.environ["CAP_PRICING_VERIFY_SIGNATURE"] = "false"
             os.environ["OPENAI_API_KEY"] = "test"
             os.environ["CAP_OPENAI_MAX_COMPLETION_TOKENS"] = "10"
 

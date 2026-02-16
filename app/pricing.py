@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
-import hmac
 import json
 import logging
 import os
@@ -12,10 +13,13 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from spendguard_engine import __version__ as ENGINE_VERSION
 from spendguard_engine.pricing import RateCard, cost_cents, estimate_tokens_text
 
 LOGGER = logging.getLogger(__name__)
+DEFAULT_PRICING_SIGNING_PUBLIC_KEY_B64 = "1ITgfCZsRETBLvSKFUoPsP7p3RKNH4Nto6zKLlUD8nQ="
 
 
 def _coerce_int(v: Any) -> int | None:
@@ -124,8 +128,37 @@ def _canonical_json_bytes(value: Any) -> bytes:
     ).encode("utf-8")
 
 
-def _hmac_sha256_hex(secret: str, body: bytes) -> str:
-    return hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+def _load_signing_public_key() -> Ed25519PublicKey:
+    raw = (os.getenv("CAP_PRICING_SIGNING_PUBLIC_KEY") or DEFAULT_PRICING_SIGNING_PUBLIC_KEY_B64).strip()
+    if not raw:
+        raise RuntimeError("No pricing signing public key configured")
+    try:
+        key_bytes = base64.b64decode(raw, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise RuntimeError(
+            "CAP_PRICING_SIGNING_PUBLIC_KEY must be base64-encoded raw 32-byte Ed25519 public key"
+        ) from exc
+    if len(key_bytes) != 32:
+        raise RuntimeError(
+            "CAP_PRICING_SIGNING_PUBLIC_KEY must decode to exactly 32 bytes (Ed25519 public key)"
+        )
+    try:
+        return Ed25519PublicKey.from_public_bytes(key_bytes)
+    except ValueError as exc:
+        raise RuntimeError("Invalid Ed25519 public key in CAP_PRICING_SIGNING_PUBLIC_KEY") from exc
+
+
+def _verify_ed25519_signature(
+    *, public_key: Ed25519PublicKey, signature: str, body: bytes
+) -> None:
+    try:
+        signature_bytes = base64.b64decode(signature, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise RuntimeError("Remote pricing signature must be base64-encoded Ed25519 bytes") from exc
+    try:
+        public_key.verify(signature_bytes, body)
+    except InvalidSignature as exc:
+        raise RuntimeError("Remote pricing signature verification failed") from exc
 
 
 def _parse_iso8601_utc(value: str) -> datetime:
@@ -188,14 +221,14 @@ def _verify_and_parse_signed_pricing(payload: Any) -> dict[str, dict[str, RateCa
     verify_signature = (os.getenv("CAP_PRICING_VERIFY_SIGNATURE") or "true").strip().lower()
     should_verify = verify_signature in {"1", "true", "yes", "on"}
     if should_verify:
-        signing_key = (os.getenv("CAP_PRICING_SIGNING_KEY") or "").strip()
-        if not signing_key:
-            raise RuntimeError("CAP_PRICING_SIGNING_KEY is required")
+        signing_public_key = _load_signing_public_key()
         unsigned = dict(payload)
         unsigned.pop("signature", None)
-        expected = _hmac_sha256_hex(signing_key, _canonical_json_bytes(unsigned))
-        if not hmac.compare_digest(signature.strip(), expected):
-            raise RuntimeError("Remote pricing signature verification failed")
+        _verify_ed25519_signature(
+            public_key=signing_public_key,
+            signature=signature.strip(),
+            body=_canonical_json_bytes(unsigned),
+        )
 
     expires_at = payload.get("expires_at")
     if not isinstance(expires_at, str) or not expires_at.strip():

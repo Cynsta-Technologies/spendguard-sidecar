@@ -31,7 +31,8 @@ $env:GEMINI_API_KEY = "..."
 # Cloud pricing (required)
 $env:CAP_PRICING_SOURCE = "remote"
 $env:CAP_PRICING_URL = "https://api.cynsta.com/v1/public/pricing"
-$env:CAP_PRICING_SIGNING_KEY = "<shared-signing-key>"
+# Optional override: defaults to Cynsta public key baked into sidecar
+# $env:CAP_PRICING_SIGNING_PUBLIC_KEY = "<base64-raw-ed25519-public-key>"
 $env:CAP_PRICING_VERIFY_SIGNATURE = "true"
 $env:CAP_PRICING_SCHEMA_VERSION = "1"
 
@@ -49,11 +50,11 @@ The sidecar expects this shape from cloud:
   "generated_at": "2026-02-15T12:00:00+00:00",
   "expires_at": "2026-02-15T12:05:00+00:00",
   "rates": { "openai": { "gpt-4o-mini": { "input_cents_per_1m": 30, "output_cents_per_1m": 120 } } },
-  "signature": "<hmac-sha256-hex>"
+  "signature": "<base64-ed25519-signature>"
 }
 ```
 
-- Signature algorithm: HMAC-SHA256 over canonical JSON of the document without `signature`.
+- Signature algorithm: Ed25519 over canonical JSON of the document without `signature`.
 - `ETag` and `If-None-Match` are supported for efficient refresh.
 
 ## API

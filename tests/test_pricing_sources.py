@@ -1,11 +1,12 @@
-import hashlib
-import hmac
+import base64
 import json
 import os
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from app.pricing import RateCard, RateTableProvider, load_rates, load_rates_from_remote
 
 
@@ -34,7 +35,16 @@ def _canonical_json_bytes(value):
     ).encode("utf-8")
 
 
-def _signed_payload(*, signing_key: str, rates: dict, ttl_seconds: int = 300) -> dict:
+_TEST_PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+_TEST_PUBLIC_KEY_B64 = base64.b64encode(
+    _TEST_PRIVATE_KEY.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+).decode("ascii")
+
+
+def _signed_payload(*, private_key: Ed25519PrivateKey, rates: dict, ttl_seconds: int = 300) -> dict:
     now = datetime.now(timezone.utc)
     unsigned = {
         "schema_version": "1",
@@ -47,7 +57,7 @@ def _signed_payload(*, signing_key: str, rates: dict, ttl_seconds: int = 300) ->
         "expires_at": (now + timedelta(seconds=ttl_seconds)).isoformat(),
         "rates": rates,
     }
-    sig = hmac.new(signing_key.encode("utf-8"), _canonical_json_bytes(unsigned), hashlib.sha256).hexdigest()
+    sig = base64.b64encode(private_key.sign(_canonical_json_bytes(unsigned))).decode("ascii")
     return {**unsigned, "signature": sig}
 
 
@@ -57,7 +67,7 @@ class TestPricingSources(unittest.TestCase):
         "CAP_PRICING_URL",
         "CAP_PRICING_HTTP_TIMEOUT_SECONDS",
         "CAP_PRICE_TABLE_REFRESH_SECONDS",
-        "CAP_PRICING_SIGNING_KEY",
+        "CAP_PRICING_SIGNING_PUBLIC_KEY",
         "CAP_PRICING_VERIFY_SIGNATURE",
         "CAP_PRICING_SCHEMA_VERSION",
         "CAP_PRICING_EXPIRY_SKEW_SECONDS",
@@ -69,7 +79,7 @@ class TestPricingSources(unittest.TestCase):
         for key in self.ENV_KEYS:
             os.environ.pop(key, None)
         os.environ["CAP_PRICING_SOURCE"] = "remote"
-        os.environ["CAP_PRICING_SIGNING_KEY"] = "test-signing-key"
+        os.environ["CAP_PRICING_SIGNING_PUBLIC_KEY"] = _TEST_PUBLIC_KEY_B64
 
     def tearDown(self):
         for key in self.ENV_KEYS:
@@ -81,7 +91,7 @@ class TestPricingSources(unittest.TestCase):
 
     def test_load_rates_from_remote_verifies_signature(self):
         payload = _signed_payload(
-            signing_key="test-signing-key",
+            private_key=_TEST_PRIVATE_KEY,
             rates={"openai": {"gpt-4o-mini": {"input_cents_per_1m": 77, "output_cents_per_1m": 155}}},
         )
 
@@ -93,7 +103,7 @@ class TestPricingSources(unittest.TestCase):
 
     def test_load_rates_from_remote_rejects_invalid_signature(self):
         payload = _signed_payload(
-            signing_key="test-signing-key",
+            private_key=_TEST_PRIVATE_KEY,
             rates={"openai": {"gpt-4o-mini": {"input_cents_per_1m": 77, "output_cents_per_1m": 155}}},
         )
         payload["rates"]["openai"]["gpt-4o-mini"]["input_cents_per_1m"] = 99

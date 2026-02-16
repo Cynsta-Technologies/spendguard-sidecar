@@ -19,8 +19,6 @@ services:
         value: "true"
       - key: CAP_PRICING_SCHEMA_VERSION
         value: "1"
-      - key: CAP_PRICING_SIGNING_KEY
-        sync: false
       - key: CAP_PRICE_TABLE_REFRESH_SECONDS
         value: "300"
       - key: CAP_INGEST_URL
