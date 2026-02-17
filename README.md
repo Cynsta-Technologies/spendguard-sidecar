@@ -27,6 +27,9 @@ $env:CAP_SQLITE_PATH = ".\\cynsta-spendguard.db"
 
 # Provider keys (BYOK)
 $env:OPENAI_API_KEY = "sk-..."
+$env:XAI_API_KEY = "xai-..."
+# Optional: defaults to https://api.x.ai/v1
+# $env:XAI_BASE_URL = "https://api.x.ai/v1"
 $env:ANTHROPIC_API_KEY = "sk-ant-..."
 $env:GEMINI_API_KEY = "..."
 
@@ -67,6 +70,9 @@ The sidecar expects this shape from cloud:
 - `GET /v1/agents/{agent_id}/budget`
 - `POST /v1/agents/{agent_id}/runs`
 - Provider endpoints under `/v1/agents/{agent_id}/runs/{run_id}/...`
+  - `openai/chat/completions`, `openai/responses`
+  - `grok/chat/completions`, `grok/responses` (xAI OpenAI-compatible API)
+  - `gemini/generateContent`, `anthropic/messages`
 
 This wrapper intentionally does not enforce hosted API key auth.
 

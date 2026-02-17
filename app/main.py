@@ -98,6 +98,11 @@ def _resolve_provider_key(provider: str) -> str:
         if not key:
             raise HTTPException(status_code=500, detail="OPENAI_API_KEY is required")
         return key
+    if provider == "grok":
+        key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
+        if not key:
+            raise HTTPException(status_code=500, detail="XAI_API_KEY (or GROK_API_KEY) is required")
+        return key
     if provider == "gemini":
         key = os.getenv("GEMINI_API_KEY")
         if not key:
@@ -108,7 +113,23 @@ def _resolve_provider_key(provider: str) -> str:
         if not key:
             raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is required")
         return key
-    raise HTTPException(status_code=400, detail="provider must be openai, gemini, or anthropic")
+    raise HTTPException(status_code=400, detail="provider must be openai, grok, gemini, or anthropic")
+
+
+def _openai_compat_base_url(provider: str) -> str | None:
+    if provider != "grok":
+        return None
+    raw = (os.getenv("XAI_BASE_URL") or "").strip()
+    if not raw:
+        return "https://api.x.ai/v1"
+    return raw.rstrip("/")
+
+
+def _openai_client(provider: str) -> OpenAI:
+    base_url = _openai_compat_base_url(provider)
+    if base_url:
+        return OpenAI(api_key=_resolve_provider_key(provider), base_url=base_url)
+    return OpenAI(api_key=_resolve_provider_key(provider))
 
 
 def _model_rates(provider: str, model: str) -> tuple[int, int]:
@@ -291,6 +312,38 @@ def openai_responses(
     )
 
 
+@app.post("/v1/agents/{agent_id}/runs/{run_id}/grok/chat/completions")
+def grok_chat_completions(
+    agent_id: str,
+    run_id: str,
+    payload: dict[str, Any],
+    organization_id: str = Depends(require_org),
+) -> Any:
+    return _openai_chat_impl(
+        organization_id=organization_id,
+        agent_id=agent_id,
+        run_id=run_id,
+        payload=payload,
+        provider="grok",
+    )
+
+
+@app.post("/v1/agents/{agent_id}/runs/{run_id}/grok/responses")
+def grok_responses(
+    agent_id: str,
+    run_id: str,
+    payload: dict[str, Any],
+    organization_id: str = Depends(require_org),
+) -> Any:
+    return _openai_responses_impl(
+        organization_id=organization_id,
+        agent_id=agent_id,
+        run_id=run_id,
+        payload=payload,
+        provider="grok",
+    )
+
+
 @app.post("/v1/responses")
 def openai_compat_responses(
     payload: dict[str, Any],
@@ -310,8 +363,13 @@ def openai_compat_responses(
     )
 
 
-def _openai_chat_impl(organization_id: str, agent_id: str, run_id: str, payload: dict[str, Any]) -> Any:
-    provider = "openai"
+def _openai_chat_impl(
+    organization_id: str,
+    agent_id: str,
+    run_id: str,
+    payload: dict[str, Any],
+    provider: str = "openai",
+) -> Any:
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Invalid request body")
     model = payload.get("model")
@@ -355,7 +413,7 @@ def _openai_chat_impl(organization_id: str, agent_id: str, run_id: str, payload:
     except BudgetError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
-    client = OpenAI(api_key=_resolve_provider_key(provider))
+    client = _openai_client(provider)
     response = None
     completion_text: str | None = None
     tokens_in: int | None = None
@@ -512,8 +570,13 @@ def _count_openai_response_tool_calls(resp_dict: dict[str, Any]) -> dict[str, in
     return out
 
 
-def _openai_responses_impl(organization_id: str, agent_id: str, run_id: str, payload: dict[str, Any]) -> Any:
-    provider = "openai"
+def _openai_responses_impl(
+    organization_id: str,
+    agent_id: str,
+    run_id: str,
+    payload: dict[str, Any],
+    provider: str = "openai",
+) -> Any:
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Invalid request body")
     model = payload.get("model")
@@ -553,7 +616,7 @@ def _openai_responses_impl(organization_id: str, agent_id: str, run_id: str, pay
     except BudgetError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
-    client = OpenAI(api_key=_resolve_provider_key(provider))
+    client = _openai_client(provider)
     response = None
     resp_dict: dict[str, Any] | None = None
     tokens_in: int | None = None

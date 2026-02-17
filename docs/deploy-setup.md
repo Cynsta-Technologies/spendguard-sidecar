@@ -13,7 +13,7 @@ Required environment variables:
 - `CAP_STORE=supabase`
 - `CAP_PRICING_SOURCE=auto` (or `supabase`)
 - `CAP_PRICING_STRICT=true`
-- `OPENAI_API_KEY` (and/or `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`)
+- `OPENAI_API_KEY` (and/or `XAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`)
 
 Optional:
 

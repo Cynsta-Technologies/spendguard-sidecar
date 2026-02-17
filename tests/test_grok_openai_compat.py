@@ -1,8 +1,8 @@
+import importlib
 import os
 import sqlite3
 import tempfile
 import unittest
-import importlib
 
 
 class _FakeMsg:
@@ -30,10 +30,8 @@ class _FakeResponse:
         return {"choices": [{"message": {"content": "ok"}}], "usage": {"prompt_tokens": 10, "completion_tokens": 1}}
 
 
-class TestOpenAIBudgetClampRespectsProviderCap(unittest.TestCase):
-    def test_provider_cap_applied_before_reserve_and_logging(self):
-        # Without the fix, WCEC could be computed from an enormous max_tokens value and reserve would fail (402)
-        # even when the provider cap would have made the request affordable.
+class TestGrokOpenAICompat(unittest.TestCase):
+    def test_grok_chat_uses_xai_base_url_and_logs_provider(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = os.path.join(tmp, "cap.db")
             os.environ["CAP_MODE"] = "sidecar"
@@ -41,7 +39,7 @@ class TestOpenAIBudgetClampRespectsProviderCap(unittest.TestCase):
             os.environ["CAP_SQLITE_PATH"] = db_path
             os.environ["CAP_PRICING_SOURCE"] = "remote"
             os.environ["CAP_PRICING_VERIFY_SIGNATURE"] = "false"
-            os.environ["OPENAI_API_KEY"] = "test"
+            os.environ["XAI_API_KEY"] = "xai-test"
             os.environ["CAP_OPENAI_MAX_COMPLETION_TOKENS"] = "10"
 
             from fastapi.testclient import TestClient
@@ -49,49 +47,57 @@ class TestOpenAIBudgetClampRespectsProviderCap(unittest.TestCase):
             import app.pricing as pricing
 
             pricing.load_rates_from_remote = lambda **kwargs: (
-                {"openai": {"gpt-4o-mini": pricing.RateCard(input_cents_per_1m=30, output_cents_per_1m=120)}},
+                {"grok": {"grok-3": pricing.RateCard(input_cents_per_1m=300, output_cents_per_1m=1500)}},
                 '"test-etag"',
             )
 
             import app.main as spendguard
-            spendguard = importlib.reload(spendguard)
 
-            # Patch provider call to avoid real network.
+            spendguard = importlib.reload(spendguard)
+            captured_client_args: dict[str, str] = {}
+
+            def _fake_openai(*, api_key: str, base_url: str | None = None):
+                captured_client_args["api_key"] = api_key
+                if base_url is not None:
+                    captured_client_args["base_url"] = base_url
+                return object()
+
             def _fake_call_openai_chat(*, max_tokens: int, **kwargs):
                 self.assertEqual(max_tokens, 10)
                 return _FakeResponse()
 
+            spendguard.OpenAI = _fake_openai
             spendguard.call_openai_chat = _fake_call_openai_chat
-            spendguard.OpenAI = lambda api_key: object()
 
             client = TestClient(spendguard.app)
             agent_id = client.post("/v1/agents", json={"name": "smoke"}).json()["agent_id"]
             client.post(
                 f"/v1/agents/{agent_id}/budget",
-                json={"hard_limit_cents": 2, "topup_cents": 2},
+                json={"hard_limit_cents": 5, "topup_cents": 0},
             )
 
             r = client.post(
-                f"/v1/agents/{agent_id}/runs/run-1/openai/chat/completions",
+                f"/v1/agents/{agent_id}/runs/run-1/grok/chat/completions",
                 json={
-                    "model": "gpt-4o-mini",
+                    "model": "grok-3",
                     "messages": [{"role": "user", "content": "Say only: ok"}],
                     "max_tokens": 999999,
                     "stream": False,
                 },
             )
             self.assertEqual(r.status_code, 200, r.text)
+            self.assertEqual(captured_client_args.get("api_key"), "xai-test")
+            self.assertEqual(captured_client_args.get("base_url"), "https://api.x.ai/v1")
 
             conn = sqlite3.connect(db_path)
             try:
-                meta_json = conn.execute(
-                    "select meta_json from cap_usage_ledger where provider='openai' order by created_at desc limit 1"
+                provider = conn.execute(
+                    "select provider from cap_usage_ledger order by created_at desc limit 1"
                 ).fetchone()[0]
             finally:
                 conn.close()
 
-            # meta_json is stored as a string in sqlite store.
-            self.assertIn('"max_tokens": 10', meta_json)
+            self.assertEqual(provider, "grok")
 
 
 if __name__ == "__main__":
