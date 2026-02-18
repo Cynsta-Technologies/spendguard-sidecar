@@ -1,0 +1,24 @@
+services:
+  sidecar:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spendguard-sidecar
+    ports:
+      - "8787:8787"
+    env_file:
+      - .env
+    environment:
+      CAP_MODE: "sidecar"
+      CAP_STORE: "sqlite"
+      CAP_SQLITE_PATH: "/data/cynsta-spendguard.db"
+      CAP_PRICING_SOURCE: "remote"
+      CAP_PRICING_URL: "https://api.cynsta.com/v1/public/pricing"
+      CAP_PRICING_VERIFY_SIGNATURE: "true"
+      CAP_PRICING_SCHEMA_VERSION: "1"
+    volumes:
+      - spendguard_data:/data
+    restart: unless-stopped
+
+volumes:
+  spendguard_data:

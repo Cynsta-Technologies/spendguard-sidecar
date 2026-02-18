@@ -15,13 +15,32 @@ Sidecar does not use local default rates for settlement.
 It must fetch a signed pricing document from cloud (`/v1/public/pricing`).
 If pricing fetch/verification fails, startup fails.
 
-## Run (Local)
+## Run (Docker, Recommended)
+
+```powershell
+Copy-Item .env.example .env
+# Edit .env and set provider keys you plan to use (OPENAI_API_KEY, GEMINI_API_KEY, etc.)
+
+docker compose up -d --build
+docker compose logs -f sidecar
+```
+
+Health check:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8787/health
+```
+
+SQLite state persists in the named Docker volume `spendguard_data`.
+
+## Run (From Source)
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
+$env:CAP_MODE = "sidecar"
 $env:CAP_STORE = "sqlite"
 $env:CAP_SQLITE_PATH = ".\\cynsta-spendguard.db"
 

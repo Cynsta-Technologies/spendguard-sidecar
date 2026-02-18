@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.db
+.env
+tests
+docs
+infra
+scripts
+deploy
+render.yaml
