@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import tempfile
 import unittest
 
@@ -48,6 +49,67 @@ class TestSqliteStore(unittest.TestCase):
             with self.assertRaises(BudgetError) as ctx:
                 store.reserve(org, agent_id, "run-1", wcec_cents=20)
             self.assertEqual(ctx.exception.status_code, 402)
+
+    def test_get_rename_and_delete_agent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "cap.db")
+            store = SqliteCapStore(path)
+            org = "local"
+            agent_id = store.create_agent(org, name="alpha")
+
+            agent = store.get_agent(org, agent_id)
+            self.assertEqual(agent.name, "alpha")
+
+            renamed = store.rename_agent(org, agent_id, "beta")
+            self.assertEqual(renamed.agent_id, agent_id)
+            self.assertEqual(renamed.name, "beta")
+
+            store.upsert_budget(org, agent_id, hard_limit_cents=100, topup_cents=100)
+            store.log_usage(
+                {
+                    "id": "usage-1",
+                    "organization_id": org,
+                    "agent_id": agent_id,
+                    "run_id": "run-1",
+                    "provider": "openai",
+                    "model": "gpt-4o-mini",
+                    "input_tokens": 10,
+                    "output_tokens": 5,
+                    "wcec_cents": 2,
+                    "realized_cents": 1,
+                    "termination_reason": None,
+                    "meta_json": "{}",
+                    "created_at": "2026-02-18T00:00:00+00:00",
+                }
+            )
+
+            store.delete_agent(org, agent_id)
+
+            with self.assertRaises(BudgetError) as get_ctx:
+                store.get_agent(org, agent_id)
+            self.assertEqual(get_ctx.exception.status_code, 404)
+
+            with self.assertRaises(BudgetError) as budget_ctx:
+                store.get_budget(org, agent_id)
+            self.assertEqual(budget_ctx.exception.status_code, 404)
+
+            conn = sqlite3.connect(path)
+            try:
+                row = conn.execute(
+                    "select count(*) from cap_usage_ledger where organization_id=? and agent_id=?",
+                    (org, agent_id),
+                ).fetchone()
+            finally:
+                conn.close()
+            self.assertEqual(int(row[0]), 0)
+
+    def test_delete_agent_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "cap.db")
+            store = SqliteCapStore(path)
+            with self.assertRaises(BudgetError) as ctx:
+                store.delete_agent("local", "missing-agent")
+            self.assertEqual(ctx.exception.status_code, 404)
 
 
 if __name__ == "__main__":

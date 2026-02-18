@@ -47,6 +47,15 @@ class CapStore:
     def list_agents(self, organization_id: str) -> list[AgentRecord]:
         raise NotImplementedError
 
+    def get_agent(self, organization_id: str, agent_id: str) -> AgentRecord:
+        raise NotImplementedError
+
+    def rename_agent(self, organization_id: str, agent_id: str, name: str) -> AgentRecord:
+        raise NotImplementedError
+
+    def delete_agent(self, organization_id: str, agent_id: str) -> None:
+        raise NotImplementedError
+
     def upsert_budget(
         self,
         organization_id: str,
@@ -172,6 +181,71 @@ class SqliteCapStore(CapStore):
                     )
                 )
             return out
+        finally:
+            conn.close()
+
+    def get_agent(self, organization_id: str, agent_id: str) -> AgentRecord:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "select agent_id, name, created_at from cap_agents where organization_id=? and agent_id=?",
+                (organization_id, agent_id),
+            ).fetchone()
+            if not row:
+                raise BudgetError(404, "Agent not found")
+            return AgentRecord(
+                agent_id=str(row["agent_id"]),
+                name=row["name"],
+                created_at=str(row["created_at"]),
+            )
+        finally:
+            conn.close()
+
+    def rename_agent(self, organization_id: str, agent_id: str, name: str) -> AgentRecord:
+        updated_name = name.strip()
+        if not updated_name:
+            raise BudgetError(400, "name must be a non-empty string")
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "select agent_id from cap_agents where organization_id=? and agent_id=?",
+                (organization_id, agent_id),
+            ).fetchone()
+            if not row:
+                raise BudgetError(404, "Agent not found")
+            conn.execute(
+                "update cap_agents set name=? where organization_id=? and agent_id=?",
+                (updated_name, organization_id, agent_id),
+            )
+            conn.commit()
+            return self.get_agent(organization_id, agent_id)
+        finally:
+            conn.close()
+
+    def delete_agent(self, organization_id: str, agent_id: str) -> None:
+        conn = self._connect()
+        try:
+            conn.execute("begin immediate")
+            row = conn.execute(
+                "select agent_id from cap_agents where organization_id=? and agent_id=?",
+                (organization_id, agent_id),
+            ).fetchone()
+            if not row:
+                raise BudgetError(404, "Agent not found")
+            # Keep sqlite behavior aligned with Supabase ON DELETE CASCADE.
+            conn.execute(
+                "delete from cap_usage_ledger where organization_id=? and agent_id=?",
+                (organization_id, agent_id),
+            )
+            conn.execute(
+                "delete from cap_budgets where organization_id=? and agent_id=?",
+                (organization_id, agent_id),
+            )
+            conn.execute(
+                "delete from cap_agents where organization_id=? and agent_id=?",
+                (organization_id, agent_id),
+            )
+            conn.commit()
         finally:
             conn.close()
 
@@ -389,6 +463,58 @@ class SupabaseCapStore(CapStore):
                 )
             )
         return out
+
+    def get_agent(self, organization_id: str, agent_id: str) -> AgentRecord:
+        rows = self.client.request_json(
+            "GET",
+            "/rest/v1/cap_agents",
+            params={
+                "organization_id": f"eq.{organization_id}",
+                "id": f"eq.{agent_id}",
+                "select": "id,name,created_at",
+                "limit": 1,
+            },
+            expect=(200,),
+        )
+        if not rows:
+            raise BudgetError(404, "Agent not found")
+        row = rows[0]
+        return AgentRecord(
+            agent_id=row["id"],
+            name=row.get("name"),
+            created_at=row["created_at"],
+        )
+
+    def rename_agent(self, organization_id: str, agent_id: str, name: str) -> AgentRecord:
+        updated_name = name.strip()
+        if not updated_name:
+            raise BudgetError(400, "name must be a non-empty string")
+        self.get_agent(organization_id, agent_id)
+        self.client.request_json(
+            "PATCH",
+            "/rest/v1/cap_agents",
+            params={
+                "organization_id": f"eq.{organization_id}",
+                "id": f"eq.{agent_id}",
+            },
+            json_body={"name": updated_name},
+            headers={"Prefer": "return=representation"},
+            expect=(200, 204),
+        )
+        return self.get_agent(organization_id, agent_id)
+
+    def delete_agent(self, organization_id: str, agent_id: str) -> None:
+        self.get_agent(organization_id, agent_id)
+        self.client.request_json(
+            "DELETE",
+            "/rest/v1/cap_agents",
+            params={
+                "organization_id": f"eq.{organization_id}",
+                "id": f"eq.{agent_id}",
+            },
+            headers={"Prefer": "return=minimal"},
+            expect=(200, 204),
+        )
 
     def upsert_budget(self, organization_id: str, agent_id: str, hard_limit_cents: int, topup_cents: int) -> AgentBudget:
         if hard_limit_cents <= 0:

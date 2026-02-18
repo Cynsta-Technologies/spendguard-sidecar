@@ -207,6 +207,14 @@ def _anthropic_rate_card_for_accounting(card):
     )
 
 
+def _agent_dict(agent: Any) -> dict[str, Any]:
+    return {
+        "agent_id": agent.agent_id,
+        "name": agent.name,
+        "created_at": agent.created_at,
+    }
+
+
 @app.post("/v1/agents")
 def create_agent(payload: dict[str, Any], organization_id: str = Depends(require_org)) -> dict[str, str]:
     name = payload.get("name") if isinstance(payload, dict) else None
@@ -219,16 +227,37 @@ def create_agent(payload: dict[str, Any], organization_id: str = Depends(require
 @app.get("/v1/agents")
 def list_agents(organization_id: str = Depends(require_org)) -> dict[str, Any]:
     agents = store.list_agents(organization_id=organization_id)
-    return {
-        "agents": [
-            {
-                "agent_id": row.agent_id,
-                "name": row.name,
-                "created_at": row.created_at,
-            }
-            for row in agents
-        ]
-    }
+    return {"agents": [_agent_dict(row) for row in agents]}
+
+
+@app.get("/v1/agents/{agent_id}")
+def get_agent(agent_id: str, organization_id: str = Depends(require_org)) -> dict[str, Any]:
+    try:
+        row = store.get_agent(organization_id=organization_id, agent_id=agent_id)
+    except BudgetError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return _agent_dict(row)
+
+
+@app.patch("/v1/agents/{agent_id}")
+def rename_agent(agent_id: str, payload: dict[str, Any], organization_id: str = Depends(require_org)) -> dict[str, Any]:
+    name = payload.get("name") if isinstance(payload, dict) else None
+    if not isinstance(name, str):
+        raise HTTPException(status_code=400, detail="name is required (string)")
+    try:
+        row = store.rename_agent(organization_id=organization_id, agent_id=agent_id, name=name)
+    except BudgetError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return _agent_dict(row)
+
+
+@app.delete("/v1/agents/{agent_id}")
+def delete_agent(agent_id: str, organization_id: str = Depends(require_org)) -> dict[str, Any]:
+    try:
+        store.delete_agent(organization_id=organization_id, agent_id=agent_id)
+    except BudgetError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return {"agent_id": agent_id, "deleted": True}
 
 
 @app.post("/v1/agents/{agent_id}/budget")

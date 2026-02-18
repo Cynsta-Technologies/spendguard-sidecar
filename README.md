@@ -85,6 +85,9 @@ The sidecar expects this shape from cloud:
 
 - `POST /v1/agents`
 - `GET /v1/agents`
+- `GET /v1/agents/{agent_id}`
+- `PATCH /v1/agents/{agent_id}` body `{ name }`
+- `DELETE /v1/agents/{agent_id}`
 - `POST /v1/agents/{agent_id}/budget`
 - `GET /v1/agents/{agent_id}/budget`
 - `POST /v1/agents/{agent_id}/runs`
