@@ -11,17 +11,17 @@
 
 Deploy the hosted pricing endpoint from:
 
-- `https://github.com/Cynsta-AI/spendguard-cloud`
+- `https://github.com/cynsta/spendguard-cloud`
 - Blueprint file: repo-root `render.yaml`
 
 ## Database Migrations
 
 Apply from `cynsta-db` in order:
 
-1. `https://github.com/Cynsta-AI/cynsta-db/blob/main/infra/supabase/migrations/20260120123000_create_orgs_rbac_keys.sql`
-2. `https://github.com/Cynsta-AI/cynsta-db/blob/main/infra/supabase/migrations/20260208180000_create_cap_tables.sql`
-3. `https://github.com/Cynsta-AI/cynsta-db/blob/main/infra/supabase/migrations/20260214113000_create_cap_price_cards.sql`
-4. `https://github.com/Cynsta-AI/cynsta-db/blob/main/infra/supabase/migrations/20260214114000_seed_cap_price_cards_defaults.sql`
+1. `https://github.com/cynsta/cynsta-db/blob/main/infra/supabase/migrations/20260120123000_create_orgs_rbac_keys.sql`
+2. `https://github.com/cynsta/cynsta-db/blob/main/infra/supabase/migrations/20260208180000_create_cap_tables.sql`
+3. `https://github.com/cynsta/cynsta-db/blob/main/infra/supabase/migrations/20260214113000_create_cap_price_cards.sql`
+4. `https://github.com/cynsta/cynsta-db/blob/main/infra/supabase/migrations/20260214114000_seed_cap_price_cards_defaults.sql`
 
 ## Branch Policy
 
