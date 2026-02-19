@@ -8,4 +8,5 @@ Canonical migration folder:
 
 - `https://github.com/Cynsta-AI/cynsta-db/tree/main/infra/supabase/migrations`
 
-`spendguard-server` consumes this schema but does not own an independent migration history.
+Hosted services (for example `spendguard-cloud`) consume this schema but do not own an
+independent migration history.

@@ -1,26 +1,18 @@
 # Deploy Setup
 
-## Render Service
+## Sidecar Runtime
 
-Use the repo-root `render.yaml` as the Blueprint definition for `cynsta-spendguard`.
-Render auto-detects this file when creating a Blueprint service from GitHub.
+`spendguard-sidecar` is local/BYOK runtime software and is not the hosted cloud deployment target.
 
-Required environment variables:
+- Use Docker (`docker compose up`) or local `uvicorn` as documented in `README.md`.
+- Do not create a Render Blueprint from this repository.
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `CAP_MODE=hosted`
-- `CAP_STORE=supabase`
-- `CAP_PRICING_SOURCE=auto` (or `supabase`)
-- `CAP_PRICING_STRICT=true`
-- `OPENAI_API_KEY` (and/or `XAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`)
+## Hosted Cloud Deployment
 
-Optional:
+Deploy the hosted pricing endpoint from:
 
-- `CAP_INGEST_URL`
-- `CAP_INGEST_API_KEY`
-- `CAP_PRICE_TABLE_JSON`
-- `CAP_PRICE_TABLE_REFRESH_SECONDS` (default `300`)
+- `https://github.com/Cynsta-AI/spendguard-cloud`
+- Blueprint file: repo-root `render.yaml`
 
 ## Database Migrations
 
