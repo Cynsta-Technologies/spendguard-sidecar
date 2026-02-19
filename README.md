@@ -7,7 +7,7 @@ Open-source local/BYOK SpendGuard wrapper service.
 - Pricing source: remote Cynsta cloud pricing only (signed)
 - Shared logic is imported from `spendguard-engine`
 
-User quickstart: https://github.com/Cynsta-Technologies/spendguard-sdk/blob/main/docs/quickstart.md
+User quickstart: https://github.com/Cynsta-AI/spendguard-sdk/blob/main/docs/quickstart.md
 
 ## Hard Requirement
 
